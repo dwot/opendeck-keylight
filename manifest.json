@@ -1,0 +1,94 @@
+{
+	"$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+	"UUID": "me.dwot.keylight",
+	"Name": "Elgato Key Light",
+	"Version": "0.3.0",
+	"Author": "dwot",
+	"Description": "Control Elgato Key Light devices via keylight-control's local API. Supports Stream Deck+ dials.",
+	"Category": "Key Light",
+	"CategoryIcon": "icons/category",
+	"Icon": "icons/plugin",
+	"CodePath": "bin/plugin.js",
+	"SDKVersion": 2,
+	"Software": { "MinimumVersion": "6.0" },
+	"OS": [
+		{ "Platform": "linux", "MinimumVersion": "1" },
+		{ "Platform": "windows", "MinimumVersion": "10" },
+		{ "Platform": "mac", "MinimumVersion": "10.15" }
+	],
+	"Nodejs": { "Version": "20" },
+	"Actions": [
+		{
+			"UUID": "me.dwot.keylight.brightnessdial",
+			"Name": "Brightness Dial",
+			"Tooltip": "Stream Deck+: rotate to adjust brightness, press to toggle on/off.",
+			"Icon": "icons/brightness",
+			"PropertyInspectorPath": "propertyInspector/brightnessdial.html",
+			"Controllers": ["Encoder"],
+			"Encoder": {
+				"layout": "$B1",
+				"TriggerDescription": {
+					"Push": "Toggle on/off",
+					"Rotate": "Adjust brightness",
+					"Touch": "Toggle on/off"
+				}
+			},
+			"States": [
+				{ "Image": "icons/brightness", "TitleAlignment": "middle" }
+			]
+		},
+		{
+			"UUID": "me.dwot.keylight.temperaturedial",
+			"Name": "Temperature Dial",
+			"Tooltip": "Stream Deck+: rotate to adjust color temperature, press to reset to default.",
+			"Icon": "icons/temperature",
+			"PropertyInspectorPath": "propertyInspector/temperaturedial.html",
+			"Controllers": ["Encoder"],
+			"Encoder": {
+				"layout": "$B1",
+				"TriggerDescription": {
+					"Push": "Reset to default",
+					"Rotate": "Adjust temperature",
+					"Touch": "Reset to default"
+				}
+			},
+			"States": [
+				{ "Image": "icons/temperature", "TitleAlignment": "middle" }
+			]
+		},
+		{
+			"UUID": "me.dwot.keylight.toggle",
+			"Name": "Toggle Light",
+			"Tooltip": "Toggle a Key Light on/off.",
+			"Icon": "icons/toggle",
+			"PropertyInspectorPath": "propertyInspector/toggle.html",
+			"Controllers": ["Keypad"],
+			"States": [
+				{ "Image": "icons/state-off", "TitleAlignment": "middle" },
+				{ "Image": "icons/state-on",  "TitleAlignment": "middle" }
+			]
+		},
+		{
+			"UUID": "me.dwot.keylight.setbrightness",
+			"Name": "Set Brightness",
+			"Tooltip": "Set a Key Light to a specific brightness.",
+			"Icon": "icons/brightness",
+			"PropertyInspectorPath": "propertyInspector/setbrightness.html",
+			"Controllers": ["Keypad"],
+			"States": [
+				{ "Image": "icons/brightness", "TitleAlignment": "middle" }
+			]
+		},
+		{
+			"UUID": "me.dwot.keylight.scene",
+			"Name": "Apply Scene",
+			"Tooltip": "Apply a preset (on/off + brightness + temperature).",
+			"Icon": "icons/scene",
+			"PropertyInspectorPath": "propertyInspector/scene.html",
+			"Controllers": ["Keypad"],
+			"States": [
+				{ "Image": "icons/scene", "TitleAlignment": "middle" }
+			]
+		}
+	]
+}

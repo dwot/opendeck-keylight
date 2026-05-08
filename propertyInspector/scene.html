@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<div id="error" class="error" hidden></div>
+	<div class="row">
+		<label>Device</label>
+		<select id="device"></select>
+	</div>
+	<hr>
+	<div class="row">
+		<label>Power</label>
+		<select id="power">
+			<option value="unset">Don't change</option>
+			<option value="on">Turn on</option>
+			<option value="off">Turn off</option>
+		</select>
+	</div>
+	<div class="row">
+		<label>Brightness</label>
+		<input type="range" id="brightness" min="0" max="100" step="1">
+		<div class="value"><span id="brightnessValue">--</span>%</div>
+	</div>
+	<div class="row checkbox">
+		<input type="checkbox" id="setB">
+		<label for="setB" style="flex:1;">Apply brightness</label>
+	</div>
+	<div class="row">
+		<label>Temperature</label>
+		<input type="range" id="temperature" min="2900" max="7000" step="50">
+		<div class="value"><span id="temperatureValue">--</span>K</div>
+	</div>
+	<div class="row checkbox">
+		<input type="checkbox" id="setT">
+		<label for="setT" style="flex:1;">Apply temperature</label>
+	</div>
+	<div class="note">Use scenes for presets like "stream mode" (on, 80%, 4500K) or "off everything".</div>
+
+	<script src="common.js"></script>
+	<script>
+		const $device = document.getElementById('device');
+		const $power  = document.getElementById('power');
+		const $b      = document.getElementById('brightness');
+		const $bv     = document.getElementById('brightnessValue');
+		const $setB   = document.getElementById('setB');
+		const $t      = document.getElementById('temperature');
+		const $tv     = document.getElementById('temperatureValue');
+		const $setT   = document.getElementById('setT');
+		const $err    = document.getElementById('error');
+
+		// Elgato units: 143 ≈ 7000K, 344 ≈ 2900K. Linear interp.
+		function kToElgato(k) {
+			const ratio = (7000 - k) / (7000 - 2900);
+			return Math.round(143 + ratio * (344 - 143));
+		}
+		function elgatoToK(e) {
+			const ratio = (e - 143) / (344 - 143);
+			return Math.round(7000 - ratio * (7000 - 2900));
+		}
+
+		function populateDevices(devices, settings) {
+			$device.innerHTML = '';
+			if (devices.length === 0) {
+				const opt = document.createElement('option');
+				opt.textContent = 'No devices discovered';
+				$device.appendChild(opt);
+				return;
+			}
+			const all = document.createElement('option');
+			all.value = '__ALL__';
+			all.textContent = 'All lights';
+			$device.appendChild(all);
+			for (const d of devices) {
+				const opt = document.createElement('option');
+				opt.value = String(d.index);
+				opt.textContent = `${d.name} (${d.ip})`;
+				$device.appendChild(opt);
+			}
+			if (settings.deviceId != null) $device.value = String(settings.deviceId);
+			else $device.value = '__ALL__';
+		}
+
+		PI.on('devices', (msg) => {
+			if (!msg.ok) {
+				$err.hidden = false;
+				$err.textContent = 'Could not reach keylight-control. Is it running?';
+			} else {
+				$err.hidden = true;
+				populateDevices(msg.devices, PI.getSettings());
+			}
+		});
+
+		PI.on('settings', (s) => {
+			$power.value = (s.on === true) ? 'on' : (s.on === false) ? 'off' : 'unset';
+
+			const hasB = s.brightness != null;
+			$setB.checked = hasB;
+			$b.value = hasB ? s.brightness : 50;
+			$bv.textContent = $b.value;
+
+			const hasT = s.temperature != null;
+			$setT.checked = hasT;
+			const k = hasT ? elgatoToK(s.temperature) : 4500;
+			$t.value = k;
+			$tv.textContent = k;
+		});
+
+		function save() {
+			const s = PI.getSettings();
+			s.deviceId = $device.value;
+			s.on = ($power.value === 'on') ? true : ($power.value === 'off') ? false : null;
+			s.brightness = $setB.checked ? parseInt($b.value, 10) : null;
+			s.temperature = $setT.checked ? kToElgato(parseInt($t.value, 10)) : null;
+			PI.saveSettings(s);
+		}
+
+		$device.addEventListener('change', save);
+		$power.addEventListener('change', save);
+		$b.addEventListener('input',  () => { $bv.textContent = $b.value; });
+		$b.addEventListener('change', save);
+		$setB.addEventListener('change', save);
+		$t.addEventListener('input',  () => { $tv.textContent = $t.value; });
+		$t.addEventListener('change', save);
+		$setT.addEventListener('change', save);
+	</script>
+</body>
+</html>

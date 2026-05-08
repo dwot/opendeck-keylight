@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<div id="error" class="error" hidden></div>
+	<div class="row">
+		<label>Device</label>
+		<select id="device"></select>
+	</div>
+	<div class="row">
+		<label>Step size</label>
+		<input type="number" id="step" min="25" max="500" step="25" value="100">
+		<div class="value">K per tick</div>
+	</div>
+	<div class="row">
+		<label>Reset to</label>
+		<input type="number" id="defaultK" min="2900" max="7000" step="50" value="4500">
+		<div class="value">K</div>
+	</div>
+	<div class="note">Rotate the dial to adjust color temperature (2900–7000K). Press the dial (or tap the touchscreen) to reset to the default value above.</div>
+
+	<script src="common.js"></script>
+	<script>
+		const $device   = document.getElementById('device');
+		const $step     = document.getElementById('step');
+		const $defaultK = document.getElementById('defaultK');
+		const $err      = document.getElementById('error');
+
+		function populateDevices(devices, settings) {
+			$device.innerHTML = '';
+			if (devices.length === 0) {
+				const opt = document.createElement('option');
+				opt.textContent = 'No devices discovered';
+				$device.appendChild(opt);
+				return;
+			}
+			const all = document.createElement('option');
+			all.value = '__ALL__';
+			all.textContent = 'All lights';
+			$device.appendChild(all);
+			for (const d of devices) {
+				const opt = document.createElement('option');
+				opt.value = String(d.index);
+				opt.textContent = `${d.name} (${d.ip})`;
+				$device.appendChild(opt);
+			}
+			if (settings.deviceId != null) $device.value = String(settings.deviceId);
+			else $device.value = '__ALL__';
+		}
+
+		PI.on('devices', (msg) => {
+			if (!msg.ok) {
+				$err.hidden = false;
+				$err.textContent = 'Could not reach keylight-control. Is it running?';
+			} else {
+				$err.hidden = true;
+				populateDevices(msg.devices, PI.getSettings());
+			}
+		});
+
+		PI.on('settings', (s) => {
+			$step.value     = s.step     != null ? s.step     : 100;
+			$defaultK.value = s.defaultK != null ? s.defaultK : 4500;
+		});
+
+		function save() {
+			const s = PI.getSettings();
+			s.deviceId = $device.value;
+			s.step     = parseInt($step.value, 10) || 100;
+			s.defaultK = parseInt($defaultK.value, 10) || 4500;
+			PI.saveSettings(s);
+		}
+
+		$device.addEventListener('change', save);
+		$step.addEventListener('change', save);
+		$defaultK.addEventListener('change', save);
+	</script>
+</body>
+</html>

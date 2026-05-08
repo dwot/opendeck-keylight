@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<div id="error" class="error" hidden></div>
+	<div class="row">
+		<label>Device</label>
+		<select id="device"></select>
+	</div>
+	<div class="row">
+		<label>Brightness</label>
+		<input type="range" id="brightness" min="1" max="100" step="1">
+		<div class="value"><span id="brightnessValue">50</span>%</div>
+	</div>
+	<div class="note">Pressing the key sets brightness to this value. Light is not turned on automatically.</div>
+
+	<script src="common.js"></script>
+	<script>
+		const $device = document.getElementById('device');
+		const $b = document.getElementById('brightness');
+		const $bv = document.getElementById('brightnessValue');
+		const $err = document.getElementById('error');
+
+		function populateDevices(devices, settings) {
+			$device.innerHTML = '';
+			if (devices.length === 0) {
+				const opt = document.createElement('option');
+				opt.textContent = 'No devices discovered';
+				$device.appendChild(opt);
+				return;
+			}
+			const all = document.createElement('option');
+			all.value = '__ALL__';
+			all.textContent = 'All lights';
+			$device.appendChild(all);
+			for (const d of devices) {
+				const opt = document.createElement('option');
+				opt.value = String(d.index);
+				opt.textContent = `${d.name} (${d.ip})`;
+				$device.appendChild(opt);
+			}
+			if (settings.deviceId != null) $device.value = String(settings.deviceId);
+			else $device.value = '__ALL__';
+		}
+
+		PI.on('devices', (msg) => {
+			if (!msg.ok) {
+				$err.hidden = false;
+				$err.textContent = 'Could not reach keylight-control. Is it running?';
+			} else {
+				$err.hidden = true;
+				populateDevices(msg.devices, PI.getSettings());
+			}
+		});
+
+		PI.on('settings', (s) => {
+			$b.value  = s.brightness != null ? s.brightness : 50;
+			$bv.textContent = $b.value;
+		});
+
+		$device.addEventListener('change', () => {
+			const s = PI.getSettings();
+			s.deviceId = $device.value;
+			PI.saveSettings(s);
+		});
+		$b.addEventListener('input', () => { $bv.textContent = $b.value; });
+		$b.addEventListener('change', () => {
+			const s = PI.getSettings();
+			s.brightness = parseInt($b.value, 10);
+			PI.saveSettings(s);
+		});
+	</script>
+</body>
+</html>
