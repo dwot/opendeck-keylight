@@ -75,7 +75,7 @@ function mountDiscoveryFooter() {
 		<hr>
 		<div class="row">
 			<label>Manual IPs</label>
-			<input type="text" id="klHosts" placeholder="e.g. 192.168.50.152, 192.168.50.176">
+			<input type="text" id="klHosts" placeholder="e.g. 192.168.1.50, 192.168.1.51">
 		</div>
 		<div class="row">
 			<label></label>

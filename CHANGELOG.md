@@ -2,6 +2,14 @@
 
 All notable changes to this plugin. Versions match `manifest.json` and the `vX.Y.Z` git tags.
 
+## 0.5.2
+
+### Changed
+- Release workflow: actions pinned to full commit SHAs (Dependabot keeps them current), and the
+  workflow token is read-only except for `contents: write` on the release job.
+- Example values in the settings panel and code comments are now generic (the Manual IPs
+  placeholder and the example light ID).
+
 ## 0.5.1
 
 ### Changed

@@ -4,7 +4,7 @@
  * addresses.
  *
  * Device shape: { id, name, ip, port, on, brightness, temperature, failures }
- * `id` is the light's MAC without colons (e.g. "3C6A9D19F54C"), stable across DHCP changes.
+ * `id` is the light's MAC without colons (e.g. "AABBCCDDEEFF"), stable across DHCP changes.
  */
 
 'use strict';
