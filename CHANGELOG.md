@@ -2,6 +2,12 @@
 
 All notable changes to this plugin. Versions match `manifest.json` and the `vX.Y.Z` git tags.
 
+## 0.5.1
+
+### Changed
+- Release workflow: `actions/checkout@v7` (without persisted credentials), `actions/setup-node@v7`
+  building on Node 24, `softprops/action-gh-release@v3`. All run on GitHub's Node 24 runtime.
+
 ## 0.5.0
 
 ### Changed
