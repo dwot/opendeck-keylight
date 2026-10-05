@@ -21,7 +21,7 @@
 			"UUID": "me.dwot.keylight.brightnessdial",
 			"Name": "Brightness Dial",
 			"Tooltip": "Stream Deck+: rotate to adjust brightness, press to toggle on/off.",
-			"Icon": "icons/brightness",
+			"Icon": "icons/actions/brightness",
 			"PropertyInspectorPath": "propertyInspector/brightnessdial.html",
 			"Controllers": ["Encoder"],
 			"Encoder": {
@@ -40,7 +40,7 @@
 			"UUID": "me.dwot.keylight.temperaturedial",
 			"Name": "Temperature Dial",
 			"Tooltip": "Stream Deck+: rotate to adjust color temperature, press to reset to default.",
-			"Icon": "icons/temperature",
+			"Icon": "icons/actions/temperature",
 			"PropertyInspectorPath": "propertyInspector/temperaturedial.html",
 			"Controllers": ["Encoder"],
 			"Encoder": {
@@ -59,7 +59,7 @@
 			"UUID": "me.dwot.keylight.toggle",
 			"Name": "Toggle Light",
 			"Tooltip": "Toggle a Key Light on/off.",
-			"Icon": "icons/toggle",
+			"Icon": "icons/actions/toggle",
 			"PropertyInspectorPath": "propertyInspector/toggle.html",
 			"Controllers": ["Keypad"],
 			"States": [
@@ -71,7 +71,7 @@
 			"UUID": "me.dwot.keylight.setbrightness",
 			"Name": "Set Brightness",
 			"Tooltip": "Set a Key Light to a specific brightness.",
-			"Icon": "icons/brightness",
+			"Icon": "icons/actions/brightness",
 			"PropertyInspectorPath": "propertyInspector/setbrightness.html",
 			"Controllers": ["Keypad"],
 			"States": [
@@ -82,7 +82,7 @@
 			"UUID": "me.dwot.keylight.scene",
 			"Name": "Apply Scene",
 			"Tooltip": "Apply a preset (on/off + brightness + temperature).",
-			"Icon": "icons/scene",
+			"Icon": "icons/actions/scene",
 			"PropertyInspectorPath": "propertyInspector/scene.html",
 			"Controllers": ["Keypad"],
 			"States": [

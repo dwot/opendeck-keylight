@@ -98,8 +98,7 @@ in Elgato Control Center.
 │   ├── scene.html
 │   ├── brightnessdial.html
 │   └── temperaturedial.html
-├── icons/                     PNG icons (placeholder colored circles for now)
-│   └── make_icons.py          Regenerates all icons
+├── icons/                     PNG icons (key images, action list, category, plugin)
 ├── install.sh                 Install to OpenDeck plugins dir
 ├── build.sh                   Produce a distributable .streamDeckPlugin zip
 ├── CHANGELOG.md

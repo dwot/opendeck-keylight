@@ -2,6 +2,12 @@
 
 All notable changes to this plugin. Versions match `manifest.json` and the `vX.Y.Z` git tags.
 
+## Unreleased
+
+### Changed
+- Real icons replace the placeholder circles: amber glyphs on a dark ground for keys, white
+  glyphs for the action list and category, and a 256/512 plugin icon.
+
 ## 0.4.1
 
 ### Fixed
