@@ -48,7 +48,7 @@ Done.
 
 Next steps:
   1. Restart OpenDeck.
-  2. The "Key Light" plugin should appear in the actions sidebar. Lights are
+  2. The "Key Light Direct" plugin should appear in the actions sidebar. Lights are
      discovered automatically; if none show up, add their IPs under
      "Manual IPs" in any Key Light action's settings.
 

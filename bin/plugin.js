@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * me.dwot.keylight - OpenDeck plugin for Elgato Key Lights
+ * me.dwot.keylight (Key Light Direct) - OpenDeck plugin for Elgato Key Lights
  * Talks to OpenDeck via Stream Deck SDK WebSocket protocol.
  * Talks to the lights directly over their HTTP API (port 9123); finds them with mDNS.
  */

@@ -2,6 +2,17 @@
 
 All notable changes to this plugin. Versions match `manifest.json` and the `vX.Y.Z` git tags.
 
+## 0.5.3
+
+### Changed
+- Renamed to **Key Light Direct** (was "Elgato Key Light") so it can't be confused with
+  Elgato's official plugin. The bundle ID stays `me.dwot.keylight`, so existing keys and
+  settings carry over; the actions now appear under "Key Light Direct" in OpenDeck's sidebar.
+- README and manifest description state platform support: tested on Linux, untested on
+  Windows and macOS.
+- README: Node.js 20+ requirement (was 18+) and install steps for the plugin store and release
+  files.
+
 ## 0.5.2
 
 ### Changed

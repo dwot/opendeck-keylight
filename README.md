@@ -1,7 +1,7 @@
-# opendeck-keylight
+# Key Light Direct
 
 An [OpenDeck](https://github.com/nekename/OpenDeck) plugin for controlling Elgato Key
-Light devices on Linux. Includes full Stream Deck+ dial support.
+Light devices, directly over the network. Includes full Stream Deck+ dial support.
 
 > Unofficial community plugin. Not affiliated with or endorsed by Elgato or Corsair.
 > "Elgato" and "Key Light" are trademarks of Corsair Memory, Inc.
@@ -19,6 +19,16 @@ them on the network with mDNS (`_elg._tcp`). Nothing else needs to be running.
 Versions before 0.4.0 went through [keylight-control](https://github.com/sandwichfarm/keylight-control)'s
 HTTP API instead; that's no longer needed.
 
+## Platform support
+
+| Platform | Status |
+|---|---|
+| Linux | Tested (OpenDeck 2.14, Ubuntu) |
+| Windows | **Untested.** Should work: the plugin is plain Node.js with no native code. Discovery shares mDNS port 5353 with the system's own responder, which hasn't been tried on Windows; if lights don't show up, use **Manual IPs**. |
+| macOS | **Untested.** Same as Windows: expected to work, with **Manual IPs** as the fallback if discovery comes up empty. |
+
+Reports from Windows and macOS users are welcome in the issue tracker.
+
 ## Requirements
 
 - [OpenDeck](https://github.com/nekename/OpenDeck) installed
@@ -29,7 +39,7 @@ HTTP API instead; that's no longer needed.
 
 ## Install
 
-**From OpenDeck's plugin store:** open the plugin manager, find "Elgato Key Light" in the **Plugin store** and install it.
+**From OpenDeck's plugin store:** open the plugin manager, find "Key Light Direct" in the **Plugin store** and install it.
 
 **From a release:** download `me.dwot.keylight-X.Y.Z.streamDeckPlugin` from the
 [latest release](https://github.com/dwot/opendeck-keylight/releases/latest), then in
