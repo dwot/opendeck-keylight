@@ -30,7 +30,7 @@ fi
 
 echo "Installing to $TARGET"
 mkdir -p "$TARGET"
-rsync -a --exclude=node_modules --exclude=dist --exclude='.git*' \
+rsync -a --exclude=node_modules --exclude=dist --exclude='.git*' --exclude=.idea \
 	--exclude='*.tar.gz' --exclude='*.streamDeckPlugin' \
 	"$PLUGIN_SRC/" "$TARGET/"
 

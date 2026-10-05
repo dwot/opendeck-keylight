@@ -164,9 +164,17 @@ function shortName(dev, settings) {
 	return dev.name.replace(/Elgato Key Light (Air )?/, '').replace(/\s+/g, ' ').trim().slice(0, 12);
 }
 
+const LOCAL_HOLD_MS = 3000;
+
 function updateVisual(context, info) {
 	const dev = getDevice(info.settings);
 	if (!dev) return;
+
+	if (info.lastRotate && Date.now() - info.lastRotate > LOCAL_HOLD_MS) {
+		delete info.localBrightness;
+		delete info.localK;
+		delete info.lastRotate;
+	}
 
 	const isAll = info.settings.deviceId === ALL;
 	const groupOn = isAll ? isGroupOn(info.settings) : !!dev.on;
@@ -198,6 +206,14 @@ function updateVisual(context, info) {
 	}
 }
 
+// Keys whose device dropdown was never touched have no deviceId; the PI shows
+// "All lights" for them, so treat them that way.
+function withDefaults(settings) {
+	return (settings.deviceId == null || settings.deviceId === '')
+		? { ...settings, deviceId: ALL }
+		: settings;
+}
+
 function clampInt(v, lo, hi, def) {
 	const n = parseInt(v, 10);
 	if (isNaN(n)) return def;
@@ -209,7 +225,7 @@ async function handleKeyDown(action, context, settings) {
 	try {
 		switch (action) {
 			case 'me.dwot.keylight.toggle':
-				if (settings.deviceId === ALL || settings.deviceId == null) {
+				if (settings.deviceId === ALL) {
 					// Use group state to decide the action so they end up in the same state.
 					const targetOn = !isGroupOn(settings);
 					await Promise.all(
@@ -223,14 +239,12 @@ async function handleKeyDown(action, context, settings) {
 				refreshVisuals();
 				break;
 			case 'me.dwot.keylight.setbrightness': {
-				if (settings.deviceId == null) throw new Error('No device configured');
 				const b = clampInt(settings.brightness, 1, 100, 50);
 				await applyToTarget(settings.deviceId, { brightness: b });
 				refreshVisuals();
 				break;
 			}
 			case 'me.dwot.keylight.scene': {
-				if (settings.deviceId == null) throw new Error('No device configured');
 				const payload = {};
 				if (typeof settings.on === 'boolean') payload.on = settings.on;
 				if (settings.brightness  != null)     payload.brightness  = clampInt(settings.brightness,  1, 100, 50);
@@ -269,12 +283,12 @@ function scheduleApply(context, deviceId, payload, debounceMs = 80) {
 
 async function handleDialRotate(action, context, settings, payload) {
 	const ticks = payload.ticks || 0;
-	if (settings.deviceId == null) { showAlert(context); return; }
 	const dev = getDevice(settings);
 	if (!dev) { showAlert(context); return; }
 
 	const info = actions.get(context);
 	if (!info) return;
+	info.lastRotate = Date.now();
 	const isAll = settings.deviceId === ALL;
 
 	if (action === 'me.dwot.keylight.brightnessdial') {
@@ -306,7 +320,6 @@ async function handleDialRotate(action, context, settings, payload) {
 }
 
 async function handleDialDown(action, context, settings) {
-	if (settings.deviceId == null) { showAlert(context); return; }
 	try {
 		if (action === 'me.dwot.keylight.brightnessdial') {
 			// Push = toggle. For All, drive everyone to the inverse of the group state
@@ -377,7 +390,8 @@ ws.on('message', (raw) => {
 	try { msg = JSON.parse(raw); } catch { return; }
 
 	const { event, action, context, payload } = msg;
-	const settings = (payload && payload.settings) || {};
+	const rawSettings = (payload && payload.settings) || {};
+	const settings = withDefaults(rawSettings);
 
 	switch (event) {
 		case 'willAppear':
@@ -415,7 +429,7 @@ ws.on('message', (raw) => {
 			handleSendToPlugin(context, payload);
 			break;
 		case 'didReceiveGlobalSettings':
-			globalSettings = settings;
+			globalSettings = rawSettings;
 			lights.setManualHosts(globalSettings.hosts);
 			lights.seed(globalSettings.cache);
 			refreshVisuals();

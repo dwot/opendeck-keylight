@@ -3,6 +3,9 @@
 An [OpenDeck](https://github.com/nekename/OpenDeck) plugin for controlling Elgato Key
 Light devices on Linux. Includes full Stream Deck+ dial support.
 
+> Unofficial community plugin. Not affiliated with or endorsed by Elgato or Corsair.
+> "Elgato" and "Key Light" are trademarks of Corsair Memory, Inc.
+
 The plugin talks to the lights directly over their local HTTP API (port 9123) and finds
 them on the network with mDNS (`_elg._tcp`). Nothing else needs to be running.
 
@@ -80,7 +83,8 @@ in Elgato Control Center.
 
 ```
 .
-├── manifest.json              Stream Deck SDK plugin manifest
+├── manifest.json              Stream Deck SDK plugin manifest (Elgato-valid: mac/windows)
+├── manifest.linux.json        OpenDeck-only override adding the linux platform
 ├── package.json               Node deps (just `ws`)
 ├── bin/
 │   ├── plugin.js              Main plugin: WebSocket to OpenDeck, action handlers
@@ -97,8 +101,18 @@ in Elgato Control Center.
 ├── icons/                     PNG icons (placeholder colored circles for now)
 │   └── make_icons.py          Regenerates all icons
 ├── install.sh                 Install to OpenDeck plugins dir
-└── build.sh                   Produce a distributable .streamDeckPlugin zip
+├── build.sh                   Produce a distributable .streamDeckPlugin zip
+├── CHANGELOG.md
+└── .github/workflows/
+    └── release.yml            Tag-driven build + validate + GitHub release
 ```
+
+## Releases
+
+Bump `Version` in `manifest.json` (4-part, `X.Y.Z.0`) and `version` in `package.json` (`X.Y.Z`), add a `CHANGELOG.md`
+section, then tag and push `vX.Y.Z`. `.github/workflows/release.yml` checks that the tag
+matches the manifest, builds, runs `streamdeck validate` and publishes the
+`.streamDeckPlugin` as the release's only asset (on the GitHub mirror).
 
 ## Build
 

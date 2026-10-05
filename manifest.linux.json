@@ -1,0 +1,7 @@
+{
+	"OS": [
+		{ "Platform": "linux", "MinimumVersion": "1" },
+		{ "Platform": "windows", "MinimumVersion": "10" },
+		{ "Platform": "mac", "MinimumVersion": "10.15" }
+	]
+}
