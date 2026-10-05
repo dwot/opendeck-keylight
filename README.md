@@ -22,12 +22,20 @@ HTTP API instead; that's no longer needed.
 ## Requirements
 
 - [OpenDeck](https://github.com/nekename/OpenDeck) installed
-- Node.js 18+ (`sudo apt install nodejs node-ws`, or `nodejs npm` and let `install.sh` fetch `ws`)
+- Node.js 20+ on the system `PATH` (OpenDeck runs plugins with the system `node`)
 - The lights reachable from this machine on TCP 9123. For automatic discovery, mDNS
   (UDP 5353) must reach them too: same network, or an mDNS reflector across VLANs.
   Otherwise, enter their IPs under **Manual IPs** in any Key Light action's settings.
 
 ## Install
+
+**From OpenDeck's plugin store:** open the plugin manager, find "Elgato Key Light" in the **Plugin store** and install it.
+
+**From a release:** download `me.dwot.keylight-X.Y.Z.streamDeckPlugin` from the
+[latest release](https://github.com/dwot/opendeck-keylight/releases/latest), then in
+OpenDeck's plugin manager click **Install from file**. Releases bundle their dependencies.
+
+**From source:**
 
 ```bash
 git clone https://github.com/dwot/opendeck-keylight.git
@@ -39,7 +47,7 @@ Then restart OpenDeck.
 
 The script auto-detects native (`~/.config/opendeck/plugins`) vs. Flatpak OpenDeck
 installs, copies the plugin there, and runs `npm install` only if `ws` isn't already
-available system-wide.
+available (Debian/Ubuntu: `sudo apt install node-ws`).
 
 ## Actions
 
