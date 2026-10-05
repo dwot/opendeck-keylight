@@ -6,14 +6,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_DIR_NAME="me.dwot.keylight.sdPlugin"
 PLUGIN_SRC="$SCRIPT_DIR"
 
-# OpenDeck plugin paths (Linux)
-NATIVE_DIR="$HOME/.local/share/opendeck/plugins"
-FLATPAK_DIR="$HOME/.var/app/me.amankhanna.opendeck/data/opendeck/plugins"
+# OpenDeck plugin paths (Linux). OpenDeck 2.x keeps plugins under its config dir.
+NATIVE_DIR="$HOME/.config/opendeck/plugins"
+FLATPAK_DIR="$HOME/.var/app/me.amankhanna.opendeck/config/opendeck/plugins"
 
 if [[ -d "$FLATPAK_DIR" ]]; then
 	TARGET="$FLATPAK_DIR/$PLUGIN_DIR_NAME"
 	echo "Detected Flatpak OpenDeck install."
-elif [[ -d "$(dirname "$NATIVE_DIR")" ]] || [[ -d "$NATIVE_DIR" ]]; then
+elif [[ -d "$(dirname "$NATIVE_DIR")" ]]; then
 	TARGET="$NATIVE_DIR/$PLUGIN_DIR_NAME"
 	echo "Detected native OpenDeck install."
 else
@@ -29,22 +29,29 @@ if [[ -d "$TARGET" ]]; then
 fi
 
 echo "Installing to $TARGET"
-cp -r "$PLUGIN_SRC" "$TARGET"
+mkdir -p "$TARGET"
+rsync -a --exclude=node_modules --exclude=dist --exclude='.git*' \
+	--exclude='*.tar.gz' --exclude='*.streamDeckPlugin' \
+	"$PLUGIN_SRC/" "$TARGET/"
 
-echo "Installing Node dependencies..."
-( cd "$TARGET" && npm install --omit=dev --no-audit --no-fund )
+# The only dependency is `ws`. Debian/Ubuntu's node-ws package satisfies it system-wide.
+if ( cd "$TARGET" && node -e "require('ws')" ) 2>/dev/null; then
+	echo "Node dependency 'ws' already available, skipping npm install."
+else
+	echo "Installing Node dependencies..."
+	( cd "$TARGET" && npm install --omit=dev --no-audit --no-fund )
+fi
 
 cat <<EOF
 
 Done.
 
 Next steps:
-  1. Make sure keylight-control is running and its HTTP API is enabled
-     (Settings → Advanced → Enable HTTP API).
-     Verify: curl http://localhost:27301/api/lights
-  2. Restart OpenDeck.
-  3. The "Key Light" plugin should appear in the actions sidebar.
+  1. Restart OpenDeck.
+  2. The "Key Light" plugin should appear in the actions sidebar. Lights are
+     discovered automatically; if none show up, add their IPs under
+     "Manual IPs" in any Key Light action's settings.
 
 Logs (if something goes wrong):
-  ~/.local/share/opendeck/logs/
+  ~/.local/share/opendeck/logs/plugins/me.dwot.keylight.sdPlugin.log
 EOF

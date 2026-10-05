@@ -3,33 +3,26 @@
 An [OpenDeck](https://github.com/nekename/OpenDeck) plugin for controlling Elgato Key
 Light devices on Linux. Includes full Stream Deck+ dial support.
 
-This plugin is a thin shim — it doesn't talk to the lights directly. Instead, it talks
-to [keylight-control](https://github.com/sandwichfarm/keylight-control)'s local HTTP
-API, which already handles mDNS discovery, the Elgato HTTP protocol, and connection
-management.
-
-## Why this design?
-
-`keylight-control` is a fully-featured standalone GUI for Key Lights that already
-solves the hard problems. Rather than re-implement device discovery and the Elgato
-protocol, this plugin treats `keylight-control` as a backend daemon and adds Stream
-Deck integration on top.
+The plugin talks to the lights directly over their local HTTP API (port 9123) and finds
+them on the network with mDNS (`_elg._tcp`). Nothing else needs to be running.
 
 ```
-┌─────────────┐  WebSocket  ┌─────────────────────┐   HTTP   ┌──────────────────┐
-│  OpenDeck   │ ◄────────► │ opendeck-keylight   │ ──────► │ keylight-control │
-│ (SD device) │  (SDK proto)│ (this plugin, Node) │  :27301  │  (mDNS + Elgato) │
-└─────────────┘             └─────────────────────┘          └──────────────────┘
+┌─────────────┐  WebSocket  ┌─────────────────────┐   HTTP :9123   ┌────────────┐
+│  OpenDeck   │ ◄────────► │ opendeck-keylight   │ ─────────────► │ Key Lights │
+│ (SD device) │  (SDK proto)│ (this plugin, Node) │ ◄─ mDNS ────── │            │
+└─────────────┘             └─────────────────────┘                └────────────┘
 ```
+
+Versions before 0.4.0 went through [keylight-control](https://github.com/sandwichfarm/keylight-control)'s
+HTTP API instead; that's no longer needed.
 
 ## Requirements
 
 - [OpenDeck](https://github.com/nekename/OpenDeck) installed
-- Node.js 18+ (`sudo apt install nodejs npm`)
-- [keylight-control](https://github.com/sandwichfarm/keylight-control) running, with
-  HTTP API enabled (Settings → Advanced → Enable HTTP API). Verify:
-
-      curl http://localhost:27301/api/lights
+- Node.js 18+ (`sudo apt install nodejs node-ws`, or `nodejs npm` and let `install.sh` fetch `ws`)
+- The lights reachable from this machine on TCP 9123. For automatic discovery, mDNS
+  (UDP 5353) must reach them too: same network, or an mDNS reflector across VLANs.
+  Otherwise, enter their IPs under **Manual IPs** in any Key Light action's settings.
 
 ## Install
 
@@ -41,8 +34,9 @@ cd opendeck-keylight
 
 Then restart OpenDeck.
 
-The script auto-detects native vs. Flatpak OpenDeck installs and copies the plugin to
-the right location, then runs `npm install` for the `ws` dependency.
+The script auto-detects native (`~/.config/opendeck/plugins`) vs. Flatpak OpenDeck
+installs, copies the plugin there, and runs `npm install` only if `ws` isn't already
+available system-wide.
 
 ## Actions
 
@@ -70,12 +64,17 @@ the reference value.
 
 ## Configuration
 
-Set environment variables before launching OpenDeck if your keylight-control is on a
-non-default host or port:
+Every Key Light action's settings panel has a shared footer:
 
-```bash
-KEYLIGHT_HOST=127.0.0.1 KEYLIGHT_PORT=27301 opendeck
-```
+- **Rescan**: run discovery again (also runs every 5 minutes, and whenever a light stops
+  answering).
+- **Manual IPs**: comma-separated `ip` or `ip:port` list, probed alongside mDNS results. Only
+  needed when mDNS can't reach the lights.
+
+Lights are identified by MAC address, so a light keeps its key bindings if DHCP gives it a new
+IP. The last-known lights are cached in OpenDeck's global plugin settings, so keys work
+immediately on startup, before discovery finishes. Light names come from the name you set
+in Elgato Control Center.
 
 ## Repo layout
 
@@ -84,7 +83,9 @@ KEYLIGHT_HOST=127.0.0.1 KEYLIGHT_PORT=27301 opendeck
 ├── manifest.json              Stream Deck SDK plugin manifest
 ├── package.json               Node deps (just `ws`)
 ├── bin/
-│   └── plugin.js              Main plugin: WebSocket to OpenDeck, HTTP to keylight-control
+│   ├── plugin.js              Main plugin: WebSocket to OpenDeck, action handlers
+│   ├── keylights.js           Elgato HTTP client + device registry (discovery, cache, polling)
+│   └── mdns.js                Dependency-free mDNS browser for _elg._tcp
 ├── propertyInspector/         HTML config UIs shown in OpenDeck for each action
 │   ├── common.js              Shared SDK boilerplate
 │   ├── style.css
@@ -113,9 +114,15 @@ directly installable via `install.sh` without building.
 
 ## Implementation notes
 
-- **State polling**: `lights.list` is polled every 5s to keep button visuals synced
-  with external changes (e.g., toggling from the keylight-control GUI). After each
-  user action, polled again 250ms later for snappy feedback.
+- **State polling**: every light's `GET /elgato/lights` is polled every 5s to keep button
+  visuals synced with external changes (phone app, Control Center). Writes use
+  `PUT /elgato/lights`, and the reply (the light's new state) updates the keys immediately.
+- **Discovery**: `bin/mdns.js` joins 224.0.0.251:5353 with `SO_REUSEADDR` (coexists with
+  avahi), sends a PTR query for `_elg._tcp.local` and resolves SRV/A/TXT records. Each hit is
+  confirmed with `GET /elgato/accessory-info`. A light that fails 3 polls in a row is dropped
+  until the next successful discovery.
+- **Legacy settings**: keys configured under 0.3.x stored keylight-control's numeric index;
+  those resolve to the Nth light sorted by name until the key is re-saved.
 - **Dial debouncing**: dial rotates apply optimistic local UI immediately, then
   debounce HTTP calls by 80ms — spinning the dial fires 1–2 requests, not 50.
 - **Temperature units**: the API speaks Elgato's native units (143–344). The plugin

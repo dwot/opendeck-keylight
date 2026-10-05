@@ -2,13 +2,13 @@
 /**
  * me.dwot.keylight - OpenDeck plugin for Elgato Key Lights
  * Talks to OpenDeck via Stream Deck SDK WebSocket protocol.
- * Talks to keylight-control's HTTP API (default 127.0.0.1:27301).
+ * Talks to the lights directly over their HTTP API (port 9123); finds them with mDNS.
  */
 
 'use strict';
 
 const WebSocket = require('ws');
-const http = require('http');
+const { KeyLights } = require('./keylights');
 
 // --- CLI args from OpenDeck ---
 const args = process.argv.slice(2);
@@ -27,53 +27,46 @@ if (!PORT || !PLUGIN_UUID || !REGISTER_EVT) {
 
 const ALL = '__ALL__';
 
-// --- keylight-control HTTP client ---
-const KL_HOST = process.env.KEYLIGHT_HOST || '127.0.0.1';
-const KL_PORT = parseInt(process.env.KEYLIGHT_PORT || '27301', 10);
+// --- Key Lights ---
+const POLL_MS = 5000;
+const REDISCOVER_MS = 5 * 60 * 1000;
 
-function klRequest(method, path, body) {
-	return new Promise((resolve, reject) => {
-		const data = body ? JSON.stringify(body) : null;
-		const req = http.request({
-			host: KL_HOST,
-			port: KL_PORT,
-			path,
-			method,
-			headers: data
-				? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) }
-				: {},
-			timeout: 3000,
-		}, (res) => {
-			let chunks = '';
-			res.on('data', (c) => chunks += c);
-			res.on('end', () => {
-				try { resolve(JSON.parse(chunks)); }
-				catch (e) { reject(new Error('Bad JSON from keylight-control: ' + chunks)); }
-			});
-		});
-		req.on('error', reject);
-		req.on('timeout', () => { req.destroy(new Error('keylight-control timeout')); });
-		if (data) req.write(data);
-		req.end();
-	});
-}
+const lights = new KeyLights({ onChange: () => { refreshVisuals(); saveCache(); } });
 
 const kl = {
-	list:      ()       => klRequest('GET',  '/api/lights'),
-	get:       (id)     => klRequest('GET',  `/api/lights/${encodeURIComponent(id)}`),
-	set:       (id, p)  => klRequest('PUT',  `/api/lights/${encodeURIComponent(id)}`, p),
-	toggleAll: ()       => klRequest('POST', '/api/lights/toggle'),
-	toggleOne: (id)     => klRequest('POST', `/api/lights/${encodeURIComponent(id)}/toggle`),
+	set:       (id, p) => lights.set(id, p),
+	toggleOne: (id)    => lights.toggle(id),
 };
 
 // Apply settings to one device or all of them.
 async function applyToTarget(deviceId, payload) {
 	if (deviceId === ALL) {
-		const ids = [...allLightIndices()];
-		await Promise.all(ids.map((id) => kl.set(id, payload).catch(() => {})));
+		await Promise.all(allLightIndices().map((id) => kl.set(id, payload).catch(() => {})));
 	} else {
 		await kl.set(deviceId, payload);
 	}
+	refreshVisuals();
+}
+
+// --- Global settings: manual addresses + cache of last-known lights ---
+let globalSettings = {};
+let started = false;
+
+function saveCache() {
+	const cache = lights.snapshot();
+	if (JSON.stringify(cache) === JSON.stringify(globalSettings.cache || [])) return;
+	globalSettings = { ...globalSettings, cache };
+	send({ event: 'setGlobalSettings', context: PLUGIN_UUID, payload: globalSettings });
+}
+
+function start() {
+	if (started) return;
+	started = true;
+	// Cached lights answer in milliseconds; mDNS takes a couple of seconds.
+	lights.poll().catch(() => {});
+	lights.discover().catch((e) => console.error('[keylight] discovery failed:', e.message));
+	setInterval(() => { lights.poll().catch(() => {}); }, POLL_MS);
+	setInterval(() => { lights.discover().catch(() => {}); }, REDISCOVER_MS);
 }
 
 // --- Elgato units <-> Kelvin conversion ---
@@ -95,7 +88,6 @@ function elgatoToK(e) {
 const ws = new WebSocket('ws://127.0.0.1:' + PORT);
 
 const actions = new Map();      // Map<context, { action, settings, localBrightness?, localK? }>
-const lightState = new Map();   // Cache of last-known light state, keyed by index string and MAC
 const pendingApply = new Map(); // Per-context debounce
 
 function send(payload) {
@@ -117,45 +109,31 @@ function setFeedback(context, payload) {
 ws.on('open', () => {
 	send({ event: REGISTER_EVT, uuid: PLUGIN_UUID });
 	console.log('[keylight] Registered with OpenDeck');
-	pollLights().catch((e) => console.error('[keylight] initial poll failed:', e.message));
-	setInterval(() => { pollLights().catch(() => {}); }, 5000);
+	send({ event: 'getGlobalSettings', context: PLUGIN_UUID });
+	// Don't wait forever if the host never answers getGlobalSettings.
+	setTimeout(start, 2000);
 });
 ws.on('error', (e) => console.error('[keylight] WebSocket error:', e.message));
 ws.on('close', () => { console.error('[keylight] WebSocket closed, exiting'); process.exit(0); });
 
-// --- State polling and visual sync ---
-async function pollLights() {
-	const r = await kl.list();
-	if (!r || !r.ok) return;
-	// Wipe stale entries (handles devices going away).
-	lightState.clear();
-	for (const d of r.devices || []) {
-		lightState.set(String(d.index), d);
-		if (d.mac) lightState.set(d.mac, d);
-	}
+function refreshVisuals() {
 	for (const [context, info] of actions) {
 		updateVisual(context, info);
 	}
 }
 
-// Returns iterable of integer-index strings ("0", "1", ...) — one per real device.
-function* allLightIndices() {
-	for (const [k, v] of lightState) {
-		if (k === String(v.index)) yield k;
-	}
+// Ids of every known light.
+function allLightIndices() {
+	return lights.list().map((d) => d.id);
 }
 
-// All discovered devices.
+// All known devices.
 function allDevices() {
-	const out = [];
-	for (const [k, v] of lightState) {
-		if (k === String(v.index)) out.push(v);
-	}
-	return out;
+	return lights.list();
 }
 
 // Get a representative device for the configured target.
-// For ALL, returns the first discovered device (used as the "reference" for current values).
+// For ALL, returns the first light by name (used as the "reference" for current values).
 function getDevice(settings) {
 	const id = settings && settings.deviceId;
 	if (id == null) return null;
@@ -163,7 +141,7 @@ function getDevice(settings) {
 		const all = allDevices();
 		return all.length ? all[0] : null;
 	}
-	return lightState.get(String(id)) || null;
+	return lights.get(id);
 }
 
 // "Are all targeted lights on?" — for the All Lights toggle UX.
@@ -183,7 +161,7 @@ function isGroupOn(settings) {
 function shortName(dev, settings) {
 	if (settings && settings.deviceId === ALL) return 'All Lights';
 	if (!dev) return '';
-	return dev.name.replace(/^Elgato Key Light /, '').replace(/^Air /, '').slice(0, 12);
+	return dev.name.replace(/Elgato Key Light (Air )?/, '').replace(/\s+/g, ' ').trim().slice(0, 12);
 }
 
 function updateVisual(context, info) {
@@ -235,20 +213,20 @@ async function handleKeyDown(action, context, settings) {
 					// Use group state to decide the action so they end up in the same state.
 					const targetOn = !isGroupOn(settings);
 					await Promise.all(
-						[...allLightIndices()].map((id) =>
+						allLightIndices().map((id) =>
 							kl.set(id, { on: targetOn }).catch(() => {})
 						)
 					);
 				} else {
 					await kl.toggleOne(settings.deviceId);
 				}
-				setTimeout(() => pollLights().catch(() => {}), 250);
+				refreshVisuals();
 				break;
 			case 'me.dwot.keylight.setbrightness': {
 				if (settings.deviceId == null) throw new Error('No device configured');
 				const b = clampInt(settings.brightness, 1, 100, 50);
 				await applyToTarget(settings.deviceId, { brightness: b });
-				setTimeout(() => pollLights().catch(() => {}), 250);
+				refreshVisuals();
 				break;
 			}
 			case 'me.dwot.keylight.scene': {
@@ -258,7 +236,7 @@ async function handleKeyDown(action, context, settings) {
 				if (settings.brightness  != null)     payload.brightness  = clampInt(settings.brightness,  1, 100, 50);
 				if (settings.temperature != null)     payload.temperature = clampInt(settings.temperature, E_MIN, E_MAX, 200);
 				await applyToTarget(settings.deviceId, payload);
-				setTimeout(() => pollLights().catch(() => {}), 250);
+				refreshVisuals();
 				break;
 			}
 		}
@@ -336,20 +314,20 @@ async function handleDialDown(action, context, settings) {
 			if (settings.deviceId === ALL) {
 				const targetOn = !isGroupOn(settings);
 				await Promise.all(
-					[...allLightIndices()].map((id) =>
+					allLightIndices().map((id) =>
 						kl.set(id, { on: targetOn }).catch(() => {})
 					)
 				);
 			} else {
 				await kl.toggleOne(settings.deviceId);
 			}
-			setTimeout(() => pollLights().catch(() => {}), 250);
+			refreshVisuals();
 		} else if (action === 'me.dwot.keylight.temperaturedial') {
 			const defaultK = parseInt(settings.defaultK || '4500', 10);
 			await applyToTarget(settings.deviceId, { temperature: kToElgato(defaultK) });
 			const info = actions.get(context);
 			if (info) info.localK = defaultK;
-			setTimeout(() => pollLights().catch(() => {}), 250);
+			refreshVisuals();
 		}
 	} catch (e) {
 		console.error('[keylight] dialDown failed:', e.message);
@@ -362,23 +340,34 @@ async function handleTouchTap(action, context, settings) {
 }
 
 // --- Property inspector messages ---
+function sendDevices(context) {
+	send({
+		event: 'sendToPropertyInspector',
+		context,
+		payload: {
+			event: 'devices',
+			ok: true,
+			devices: lights.list().map(({ id, name, ip }) => ({ id, name, ip })),
+			hosts: (globalSettings.hosts || []).join(', '),
+		},
+	});
+}
+
 async function handleSendToPlugin(context, payload) {
 	if (!payload || !payload.command) return;
 	if (payload.command === 'getDevices') {
-		try {
-			const r = await kl.list();
-			send({
-				event: 'sendToPropertyInspector',
-				context,
-				payload: { event: 'devices', devices: (r && r.ok) ? r.devices : [], ok: !!(r && r.ok) },
-			});
-		} catch (e) {
-			send({
-				event: 'sendToPropertyInspector',
-				context,
-				payload: { event: 'devices', devices: [], ok: false, error: e.message },
-			});
+		sendDevices(context);
+		if (lights.list().length === 0 || payload.rescan) {
+			await lights.discover().catch(() => {});
+			sendDevices(context);
 		}
+	} else if (payload.command === 'setHosts') {
+		const hosts = String(payload.hosts || '').split(/[\s,]+/).filter(Boolean);
+		globalSettings = { ...globalSettings, hosts };
+		send({ event: 'setGlobalSettings', context: PLUGIN_UUID, payload: globalSettings });
+		lights.setManualHosts(hosts);
+		await lights.discover().catch(() => {});
+		sendDevices(context);
 	}
 }
 
@@ -424,6 +413,13 @@ ws.on('message', (raw) => {
 			break;
 		case 'sendToPlugin':
 			handleSendToPlugin(context, payload);
+			break;
+		case 'didReceiveGlobalSettings':
+			globalSettings = settings;
+			lights.setManualHosts(globalSettings.hosts);
+			lights.seed(globalSettings.cache);
+			refreshVisuals();
+			start();
 			break;
 	}
 });

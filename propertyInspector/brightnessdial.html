@@ -23,36 +23,10 @@
 		const $step   = document.getElementById('step');
 		const $err    = document.getElementById('error');
 
-		function populateDevices(devices, settings) {
-			$device.innerHTML = '';
-			if (devices.length === 0) {
-				const opt = document.createElement('option');
-				opt.textContent = 'No devices discovered';
-				$device.appendChild(opt);
-				return;
-			}
-			const all = document.createElement('option');
-			all.value = '__ALL__';
-			all.textContent = 'All lights';
-			$device.appendChild(all);
-			for (const d of devices) {
-				const opt = document.createElement('option');
-				opt.value = String(d.index);
-				opt.textContent = `${d.name} (${d.ip})`;
-				$device.appendChild(opt);
-			}
-			if (settings.deviceId != null) $device.value = String(settings.deviceId);
-			else $device.value = '__ALL__';
-		}
-
 		PI.on('devices', (msg) => {
-			if (!msg.ok) {
-				$err.hidden = false;
-				$err.textContent = 'Could not reach keylight-control. Is it running?';
-			} else {
-				$err.hidden = true;
-				populateDevices(msg.devices, PI.getSettings());
-			}
+			$err.hidden = msg.devices.length > 0;
+			$err.textContent = 'No Key Lights found yet. Check they are powered and on the network, or add their IPs below.';
+			PI.fillDeviceSelect($device, msg.devices, PI.getSettings());
 		});
 
 		PI.on('settings', (s) => {

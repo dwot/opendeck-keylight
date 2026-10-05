@@ -1,7 +1,7 @@
 {
 	"name": "me.dwot.keylight",
-	"version": "0.1.0",
-	"description": "OpenDeck plugin for Elgato Key Lights via keylight-control",
+	"version": "0.4.0",
+	"description": "OpenDeck plugin for Elgato Key Lights (direct HTTP, mDNS discovery)",
 	"main": "bin/plugin.js",
 	"private": true,
 	"dependencies": {

@@ -23,3 +23,12 @@ body {
 .checkbox { display: flex; align-items: center; gap: 6px; }
 .checkbox input { margin: 0; }
 hr { border: none; border-top: 1px solid #333; margin: 10px 0; }
+button {
+	background: #3a3a3a;
+	color: #fff;
+	border: 1px solid #555;
+	border-radius: 3px;
+	padding: 4px 10px;
+	cursor: pointer;
+}
+button:hover { background: #474747; }
