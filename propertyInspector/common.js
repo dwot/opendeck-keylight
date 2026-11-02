@@ -135,4 +135,4 @@ function connectElgatoStreamDeckSocket(port, uuid, regEvent, info, actionInfoStr
 
 // Expose globally so the SDK can call it.
 window.connectElgatoStreamDeckSocket = connectElgatoStreamDeckSocket;
-window.PI = { on, saveSettings, sendToPlugin, requestDevices, fillDeviceSelect, getSettings: () => currentSettings };
+window.PI = { on, saveSettings, sendToPlugin, requestDevices, fillDeviceSelect, getSettings: () => currentSettings, getAction: () => actionUuid };

@@ -100,7 +100,7 @@ function elgatoToK(e) {
 // --- OpenDeck WebSocket ---
 const ws = new WebSocket('ws://127.0.0.1:' + PORT);
 
-const actions = new Map();      // Map<context, { action, settings, localBrightness?, localK? }>
+const actions = new Map();      // Map<context, { action, settings, mode?, localBrightness?, localK? }>
 const pendingApply = new Map(); // Per-context debounce
 
 function send(payload) {
@@ -184,12 +184,42 @@ function missingLabel(settings) {
 // Lights restored from the cache have no state until their first poll.
 const hasState = (dev) => !!dev && typeof dev.brightness === 'number' && typeof dev.temperature === 'number';
 
-function dialFeedback(context, info, dev, shown) {
+// --- Dial behaviour ---
+// Each dial turns either brightness or colour temperature (its mode). Press
+// and touch each run a configurable function; the defaults are what each
+// dial did before these were configurable.
+const BRIGHTNESS_DIAL = 'me.dwot.keylight.brightnessdial';
+const TEMPERATURE_DIAL = 'me.dwot.keylight.temperaturedial';
+const isDial = (action) => action === BRIGHTNESS_DIAL || action === TEMPERATURE_DIAL;
+const DIAL_FUNCTIONS = ['toggle', 'mode', 'reset', 'none'];
+const DIAL_DEFAULTS = {
+	[BRIGHTNESS_DIAL]:  { mode: 'brightness',  press: 'toggle', touch: 'toggle' },
+	[TEMPERATURE_DIAL]: { mode: 'temperature', press: 'reset',  touch: 'reset' },
+};
+function dialFunction(info, kind) {
+	const chosen = info.settings[kind === 'press' ? 'pressAction' : 'touchAction'];
+	return DIAL_FUNCTIONS.includes(chosen) ? chosen : DIAL_DEFAULTS[info.action][kind];
+}
+function dialMode(info) {
+	return info.mode || DIAL_DEFAULTS[info.action].mode;
+}
+// Older settings kept one "step" in the unit of the dial's own mode.
+function brightnessStep(info) {
+	const legacy = info.action === BRIGHTNESS_DIAL ? info.settings.step : null;
+	return clampInt(info.settings.stepB != null ? info.settings.stepB : legacy, 1, 50, 5);
+}
+function temperatureStep(info) {
+	const legacy = info.action === TEMPERATURE_DIAL ? info.settings.step : null;
+	return clampInt(info.settings.stepK != null ? info.settings.stepK : legacy, 25, 500, 100);
+}
+
+function dialFeedback(context, info, dev) {
 	const isAll = info.settings.deviceId === ALL;
+	const mode = dialMode(info);
 	if (!hasState(dev)) {
 		setFeedback(context, {
 			title: render.dialTitle(colours, dev ? shortName(dev, info.settings) : missingLabel(info.settings)),
-			icon: render.dialIcon(colours, info.action === 'me.dwot.keylight.temperaturedial' ? 'thermo' : 'sun'),
+			icon: render.dialIcon(colours, mode === 'temperature' ? 'thermo' : 'sun'),
 			value: dev ? '--' : 'no light', unit: '',
 			needle: render.needle(colours, 0), meter: render.levelBar(colours, 0),
 			muteOverlay: { enabled: false },
@@ -197,11 +227,12 @@ function dialFeedback(context, info, dev, shown) {
 		return;
 	}
 	const title = render.dialTitle(colours, shortName(dev, info.settings));
-	if (info.action === 'me.dwot.keylight.brightnessdial') {
-		const groupOn = isAll ? isGroupOn(info.settings) : !!dev.on;
-		const b = shown != null ? shown : dev.brightness;
+	const groupOn = isAll ? isGroupOn(info.settings) : !!dev.on;
+	if (mode === 'brightness') {
+		const turning = info.localBrightness != null;
+		const b = turning ? info.localBrightness : dev.brightness;
 		// While off the dial reads OFF, unless it is being turned.
-		const showNumber = groupOn || shown != null;
+		const showNumber = groupOn || turning;
 		setFeedback(context, {
 			title, icon: render.dialIcon(colours, 'sun'),
 			value: showNumber ? String(b) : 'OFF', unit: showNumber ? '%' : '',
@@ -209,11 +240,14 @@ function dialFeedback(context, info, dev, shown) {
 			muteOverlay: { enabled: false },
 		});
 	} else {
-		const k = shown != null ? shown : elgatoToK(dev.temperature);
+		const turning = info.localK != null;
+		const k = turning ? info.localK : elgatoToK(dev.temperature);
 		const frac = (k - K_MIN) / (K_MAX - K_MIN);
+		// Off reads OFF here too, unless the dial is being turned.
+		const showNumber = groupOn || turning;
 		setFeedback(context, {
 			title, icon: render.dialIcon(colours, 'thermo'),
-			value: String(k), unit: 'K',
+			value: showNumber ? String(k) : 'OFF', unit: showNumber ? 'K' : '',
 			needle: render.needle(colours, frac), meter: render.kelvinBar(colours, frac),
 			muteOverlay: { enabled: false },
 		});
@@ -238,8 +272,7 @@ function updateVisual(context, info) {
 		delete info.lastRotate;
 	}
 
-	if (info.action === 'me.dwot.keylight.brightnessdial') return dialFeedback(context, info, dev, info.localBrightness);
-	if (info.action === 'me.dwot.keylight.temperaturedial') return dialFeedback(context, info, dev, info.localK);
+	if (isDial(info.action)) return dialFeedback(context, info, dev);
 
 	const isAll = info.settings.deviceId === ALL;
 	const known = hasState(dev);
@@ -350,56 +383,69 @@ async function handleDialRotate(action, context, settings, payload) {
 	const info = actions.get(context);
 	if (!info) return;
 	info.lastRotate = Date.now();
-	if (action === 'me.dwot.keylight.brightnessdial') {
-		const step = parseInt(settings.step || '5', 10);
+	if (dialMode(info) === 'brightness') {
 		const current = (info.localBrightness != null) ? info.localBrightness : dev.brightness;
-		const next = Math.max(1, Math.min(100, current + ticks * step));
-		info.localBrightness = next;
-
-		dialFeedback(context, info, dev, next);
-		scheduleApply(context, settings.deviceId, { brightness: next });
-	} else if (action === 'me.dwot.keylight.temperaturedial') {
-		const stepK = parseInt(settings.step || '100', 10);
+		info.localBrightness = Math.max(1, Math.min(100, current + ticks * brightnessStep(info)));
+		dialFeedback(context, info, dev);
+		scheduleApply(context, settings.deviceId, { brightness: info.localBrightness });
+	} else {
 		const currentK = (info.localK != null) ? info.localK : elgatoToK(dev.temperature);
-		const nextK = Math.max(K_MIN, Math.min(K_MAX, currentK + ticks * stepK));
-		info.localK = nextK;
-		dialFeedback(context, info, dev, nextK);
-		scheduleApply(context, settings.deviceId, { temperature: kToElgato(nextK) });
+		// Snap to the step so the readout lands on round values.
+		const stepK = temperatureStep(info);
+		info.localK = Math.max(K_MIN, Math.min(K_MAX, Math.round(currentK / stepK) * stepK + ticks * stepK));
+		dialFeedback(context, info, dev);
+		scheduleApply(context, settings.deviceId, { temperature: kToElgato(info.localK) });
 	}
 }
 
-async function handleDialDown(action, context, settings) {
+// Press and touch run whichever function the dial is configured with.
+async function handleDialInput(kind, context) {
+	const info = actions.get(context);
+	if (!info || !isDial(info.action)) return;
+	const settings = info.settings;
 	try {
-		if (action === 'me.dwot.keylight.brightnessdial') {
-			// Push = toggle. For All, drive everyone to the inverse of the group state
-			// (so they end up in the same on/off state, no matter what they were before).
-			if (settings.deviceId === ALL) {
-				const targetOn = !isGroupOn(settings);
-				await Promise.all(
-					allLightIndices().map((id) =>
-						kl.set(id, { on: targetOn }).catch(() => {})
-					)
-				);
-			} else {
-				await kl.toggleOne(settings.deviceId);
+		switch (dialFunction(info, kind)) {
+			case 'toggle':
+				// For All, drive everyone to the inverse of the group state
+				// (so they end up in the same on/off state, no matter what they were before).
+				if (settings.deviceId === ALL) {
+					const targetOn = !isGroupOn(settings);
+					await Promise.all(
+						allLightIndices().map((id) =>
+							kl.set(id, { on: targetOn }).catch(() => {})
+						)
+					);
+				} else {
+					await kl.toggleOne(settings.deviceId);
+				}
+				// Show the new on/off state now, not the value last turned to.
+				delete info.localBrightness;
+				delete info.localK;
+				delete info.lastRotate;
+				refreshVisuals();
+				break;
+			case 'mode':
+				info.mode = dialMode(info) === 'brightness' ? 'temperature' : 'brightness';
+				delete info.localBrightness;
+				delete info.localK;
+				delete info.lastRotate;
+				updateVisual(context, info);
+				break;
+			case 'reset': {
+				const defaultK = clampInt(settings.defaultK, K_MIN, K_MAX, 4500);
+				await applyToTarget(settings.deviceId, { temperature: kToElgato(defaultK) });
+				info.localK = defaultK;
+				info.lastRotate = Date.now();
+				refreshVisuals();
+				break;
 			}
-			refreshVisuals();
-		} else if (action === 'me.dwot.keylight.temperaturedial') {
-			const defaultK = parseInt(settings.defaultK || '4500', 10);
-			await applyToTarget(settings.deviceId, { temperature: kToElgato(defaultK) });
-			const info = actions.get(context);
-			if (info) info.localK = defaultK;
-			refreshVisuals();
 		}
 	} catch (e) {
-		console.error('[keylight] dialDown failed:', e.message);
+		console.error(`[keylight] dial ${kind} failed:`, e.message);
 		showAlert(context);
 	}
 }
 
-async function handleTouchTap(action, context, settings) {
-	return handleDialDown(action, context, settings);
-}
 
 // --- Property inspector messages ---
 function sendDevices(context) {
@@ -467,6 +513,9 @@ ws.on('message', (raw) => {
 			info.settings = settings;
 			delete info.localBrightness;
 			delete info.localK;
+			// With no input left to switch modes, return to the dial's own mode.
+			if (isDial(info.action) && dialFunction(info, 'press') !== 'mode' && dialFunction(info, 'touch') !== 'mode')
+				delete info.mode;
 			actions.set(context, info);
 			updateVisual(context, info);
 			break;
@@ -478,12 +527,12 @@ ws.on('message', (raw) => {
 			handleDialRotate(action, context, settings, payload);
 			break;
 		case 'dialDown':
-			handleDialDown(action, context, settings);
+			handleDialInput('press', context);
 			break;
 		case 'dialUp':
 			break;
 		case 'touchTap':
-			handleTouchTap(action, context, settings);
+			handleDialInput('touch', context);
 			break;
 		case 'sendToPlugin':
 			handleSendToPlugin(context, payload);

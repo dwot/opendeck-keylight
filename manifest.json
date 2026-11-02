@@ -30,7 +30,7 @@
 		{
 			"UUID": "me.dwot.keylight.brightnessdial",
 			"Name": "Brightness Dial",
-			"Tooltip": "Stream Deck+: rotate to adjust brightness, press to toggle on/off.",
+			"Tooltip": "Stream Deck+: rotate to adjust brightness; press and tap are configurable (on/off, switch to colour temperature, reset temperature).",
 			"Icon": "icons/brightness-dial",
 			"PropertyInspectorPath": "propertyInspector/brightnessdial.html",
 			"Controllers": [
@@ -39,9 +39,9 @@
 			"Encoder": {
 				"layout": "layouts/dial.json",
 				"TriggerDescription": {
-					"Push": "Toggle on/off",
 					"Rotate": "Adjust brightness",
-					"Touch": "Toggle on/off"
+					"Push": "Configurable",
+					"Touch": "Configurable"
 				}
 			},
 			"States": [
@@ -54,7 +54,7 @@
 		{
 			"UUID": "me.dwot.keylight.temperaturedial",
 			"Name": "Temperature Dial",
-			"Tooltip": "Stream Deck+: rotate to adjust color temperature, press to reset to default.",
+			"Tooltip": "Stream Deck+: rotate to adjust colour temperature; press and tap are configurable (on/off, switch to brightness, reset temperature).",
 			"Icon": "icons/temperature-dial",
 			"PropertyInspectorPath": "propertyInspector/temperaturedial.html",
 			"Controllers": [
@@ -63,9 +63,9 @@
 			"Encoder": {
 				"layout": "layouts/dial.json",
 				"TriggerDescription": {
-					"Push": "Reset to default",
 					"Rotate": "Adjust temperature",
-					"Touch": "Reset to default"
+					"Push": "Configurable",
+					"Touch": "Configurable"
 				}
 			},
 			"States": [
