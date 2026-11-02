@@ -9,6 +9,19 @@
 
 const WebSocket = require('ws');
 const { KeyLights } = require('./keylights');
+const render = require('./render');
+
+// Keys and dials wear the OpenXLR skin and follow it when it changes.
+let colours = require('./skin-palettes.json').broadcast;
+import('./skin-palette.mjs').then(({ SkinPalette }) => {
+	const skin = new SkinPalette(() => { colours = skin.colours; refreshVisuals(); });
+	colours = skin.colours;
+	refreshVisuals();
+}).catch((e) => console.error('[keylight] skin palette unavailable:', e.message));
+
+// Contexts whose OpenDeck title is empty; those keys draw their own label.
+const emptyTitle = new Set();
+const DIAL_LAYOUT = 'layouts/dial.json';
 
 // --- CLI args from OpenDeck ---
 const args = process.argv.slice(2);
@@ -93,14 +106,11 @@ const pendingApply = new Map(); // Per-context debounce
 function send(payload) {
 	if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(payload));
 }
-function setState(context, state) {
-	send({ event: 'setState', context, payload: { state } });
+function setImage(context, image) {
+	send({ event: 'setImage', context, payload: { image, target: 0 } });
 }
 function showAlert(context) {
 	send({ event: 'showAlert', context });
-}
-function setTitle(context, title) {
-	send({ event: 'setTitle', context, payload: { title, target: 0 } });
 }
 function setFeedback(context, payload) {
 	send({ event: 'setFeedback', context, payload });
@@ -166,9 +176,61 @@ function shortName(dev, settings) {
 
 const LOCAL_HOLD_MS = 3000;
 
+// What a light's controls show while it cannot be found.
+function missingLabel(settings) {
+	return settings && settings.deviceId === ALL ? 'All Lights' : 'No light';
+}
+
+// Lights restored from the cache have no state until their first poll.
+const hasState = (dev) => !!dev && typeof dev.brightness === 'number' && typeof dev.temperature === 'number';
+
+function dialFeedback(context, info, dev, shown) {
+	const isAll = info.settings.deviceId === ALL;
+	if (!hasState(dev)) {
+		setFeedback(context, {
+			title: render.dialTitle(colours, dev ? shortName(dev, info.settings) : missingLabel(info.settings)),
+			icon: render.dialIcon(colours, info.action === 'me.dwot.keylight.temperaturedial' ? 'thermo' : 'sun'),
+			value: dev ? '--' : 'no light', unit: '',
+			needle: render.needle(colours, 0), meter: render.levelBar(colours, 0),
+			muteOverlay: { enabled: false },
+		});
+		return;
+	}
+	const title = render.dialTitle(colours, shortName(dev, info.settings));
+	if (info.action === 'me.dwot.keylight.brightnessdial') {
+		const groupOn = isAll ? isGroupOn(info.settings) : !!dev.on;
+		const b = shown != null ? shown : dev.brightness;
+		// While off the dial reads OFF, unless it is being turned.
+		const showNumber = groupOn || shown != null;
+		setFeedback(context, {
+			title, icon: render.dialIcon(colours, 'sun'),
+			value: showNumber ? String(b) : 'OFF', unit: showNumber ? '%' : '',
+			needle: render.needle(colours, b / 100), meter: render.levelBar(colours, b / 100),
+			muteOverlay: { enabled: false },
+		});
+	} else {
+		const k = shown != null ? shown : elgatoToK(dev.temperature);
+		const frac = (k - K_MIN) / (K_MAX - K_MIN);
+		setFeedback(context, {
+			title, icon: render.dialIcon(colours, 'thermo'),
+			value: String(k), unit: 'K',
+			needle: render.needle(colours, frac), meter: render.kelvinBar(colours, frac),
+			muteOverlay: { enabled: false },
+		});
+	}
+}
+
+// Does the light already look like this scene?
+function sceneMatches(dev, s) {
+	if (typeof s.on === 'boolean' && !!dev.on !== s.on) return false;
+	if (s.on === false) return true;
+	if (s.brightness != null && dev.brightness !== clampInt(s.brightness, 1, 100, 50)) return false;
+	if (s.temperature != null && Math.abs(dev.temperature - clampInt(s.temperature, E_MIN, E_MAX, 200)) > 2) return false;
+	return true;
+}
+
 function updateVisual(context, info) {
 	const dev = getDevice(info.settings);
-	if (!dev) return;
 
 	if (info.lastRotate && Date.now() - info.lastRotate > LOCAL_HOLD_MS) {
 		delete info.localBrightness;
@@ -176,34 +238,33 @@ function updateVisual(context, info) {
 		delete info.lastRotate;
 	}
 
-	const isAll = info.settings.deviceId === ALL;
-	const groupOn = isAll ? isGroupOn(info.settings) : !!dev.on;
+	if (info.action === 'me.dwot.keylight.brightnessdial') return dialFeedback(context, info, dev, info.localBrightness);
+	if (info.action === 'me.dwot.keylight.temperaturedial') return dialFeedback(context, info, dev, info.localK);
 
+	const isAll = info.settings.deviceId === ALL;
+	const known = hasState(dev);
+	const groupOn = known && (isAll ? isGroupOn(info.settings) : !!dev.on);
+	const own = emptyTitle.has(context);
+	const name = dev ? shortName(dev, info.settings) : missingLabel(info.settings);
+	let key;
 	switch (info.action) {
-		case 'me.dwot.keylight.toggle':
-			setState(context, groupOn ? 1 : 0);
-			if (info.settings.showBrightness) {
-				setTitle(context, groupOn ? `${dev.brightness}%` : '');
-			}
-			break;
-		case 'me.dwot.keylight.brightnessdial':
-			setFeedback(context, {
-				title: shortName(dev, info.settings),
-				value: groupOn ? `${dev.brightness}%` : 'OFF',
-				indicator: groupOn ? dev.brightness : 0,
-			});
-			break;
-		case 'me.dwot.keylight.temperaturedial': {
-			const k = elgatoToK(dev.temperature);
-			const indicatorPct = Math.round(((k - K_MIN) / (K_MAX - K_MIN)) * 100);
-			setFeedback(context, {
-				title: shortName(dev, info.settings),
-				value: `${k}K`,
-				indicator: indicatorPct,
-			});
+		case 'me.dwot.keylight.toggle': {
+			const level = groupOn && info.settings.showBrightness ? `\n${dev.brightness}%` : '';
+			key = { on: groupOn, known, glyph: 'light', label: own ? name + level : '' };
 			break;
 		}
+		case 'me.dwot.keylight.setbrightness': {
+			const b = clampInt(info.settings.brightness, 1, 100, 50);
+			key = { on: groupOn && dev.brightness === b, known, badge: String(b), label: own ? name : '' };
+			break;
+		}
+		case 'me.dwot.keylight.scene':
+			key = { on: known && sceneMatches(dev, info.settings), known, glyph: 'scene', label: own ? name : '' };
+			break;
+		default:
+			return;
 	}
+	setImage(context, render.keyImage(colours, key));
 }
 
 // Keys whose device dropdown was never touched have no deviceId; the PI shows
@@ -284,37 +345,25 @@ function scheduleApply(context, deviceId, payload, debounceMs = 80) {
 async function handleDialRotate(action, context, settings, payload) {
 	const ticks = payload.ticks || 0;
 	const dev = getDevice(settings);
-	if (!dev) { showAlert(context); return; }
+	if (!hasState(dev)) { showAlert(context); return; }
 
 	const info = actions.get(context);
 	if (!info) return;
 	info.lastRotate = Date.now();
-	const isAll = settings.deviceId === ALL;
-
 	if (action === 'me.dwot.keylight.brightnessdial') {
 		const step = parseInt(settings.step || '5', 10);
 		const current = (info.localBrightness != null) ? info.localBrightness : dev.brightness;
 		const next = Math.max(1, Math.min(100, current + ticks * step));
 		info.localBrightness = next;
 
-		const groupOn = isAll ? isGroupOn(settings) : !!dev.on;
-		setFeedback(context, {
-			title: shortName(dev, settings),
-			value: groupOn ? `${next}%` : `${next}% (off)`,
-			indicator: groupOn ? next : 0,
-		});
+		dialFeedback(context, info, dev, next);
 		scheduleApply(context, settings.deviceId, { brightness: next });
 	} else if (action === 'me.dwot.keylight.temperaturedial') {
 		const stepK = parseInt(settings.step || '100', 10);
 		const currentK = (info.localK != null) ? info.localK : elgatoToK(dev.temperature);
 		const nextK = Math.max(K_MIN, Math.min(K_MAX, currentK + ticks * stepK));
 		info.localK = nextK;
-		const indicatorPct = Math.round(((nextK - K_MIN) / (K_MAX - K_MIN)) * 100);
-		setFeedback(context, {
-			title: shortName(dev, settings),
-			value: `${nextK}K`,
-			indicator: indicatorPct,
-		});
+		dialFeedback(context, info, dev, nextK);
 		scheduleApply(context, settings.deviceId, { temperature: kToElgato(nextK) });
 	}
 }
@@ -396,10 +445,21 @@ ws.on('message', (raw) => {
 	switch (event) {
 		case 'willAppear':
 			actions.set(context, { action, settings });
-			updateVisual(context, { action, settings });
+			// Dials placed before the layout existed still carry $B1.
+			if (payload && payload.controller === 'Encoder')
+				send({ event: 'setFeedbackLayout', context, payload: { layout: DIAL_LAYOUT } });
+			updateVisual(context, actions.get(context));
 			break;
+		case 'titleParametersDidChange': {
+			const title = (payload && payload.title) || '';
+			if (title === '') emptyTitle.add(context); else emptyTitle.delete(context);
+			const info = actions.get(context);
+			if (info) updateVisual(context, info);
+			break;
+		}
 		case 'willDisappear':
 			actions.delete(context);
+			emptyTitle.delete(context);
 			pendingApply.delete(context);
 			break;
 		case 'didReceiveSettings': {
