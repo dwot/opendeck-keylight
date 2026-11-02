@@ -17,6 +17,8 @@ mkdir -p "$STAGE_DIR"
 rsync -a \
 	--include='/bin/***' \
 	--include='/propertyInspector/***' \
+	--include='/layouts/***' \
+	--include='/imgs/***' \
 	--include='/icons/' --include='/icons/actions/' --include='/icons/actions/*.png' \
 	--include='/icons/*.png' \
 	--include='/manifest.json' --include='/manifest.linux.json' --include='/package.json' --include='/package-lock.json' \
