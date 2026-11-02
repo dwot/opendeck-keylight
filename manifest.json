@@ -31,7 +31,7 @@
 			"UUID": "me.dwot.keylight.brightnessdial",
 			"Name": "Brightness Dial",
 			"Tooltip": "Stream Deck+: rotate to adjust brightness, press to toggle on/off.",
-			"Icon": "icons/actions/brightness",
+			"Icon": "icons/brightness-dial",
 			"PropertyInspectorPath": "propertyInspector/brightnessdial.html",
 			"Controllers": [
 				"Encoder"
@@ -46,7 +46,7 @@
 			},
 			"States": [
 				{
-					"Image": "icons/brightness",
+					"Image": "icons/brightness-dial",
 					"TitleAlignment": "bottom"
 				}
 			]
@@ -55,7 +55,7 @@
 			"UUID": "me.dwot.keylight.temperaturedial",
 			"Name": "Temperature Dial",
 			"Tooltip": "Stream Deck+: rotate to adjust color temperature, press to reset to default.",
-			"Icon": "icons/actions/temperature",
+			"Icon": "icons/temperature-dial",
 			"PropertyInspectorPath": "propertyInspector/temperaturedial.html",
 			"Controllers": [
 				"Encoder"
@@ -70,7 +70,7 @@
 			},
 			"States": [
 				{
-					"Image": "icons/temperature",
+					"Image": "icons/temperature-dial",
 					"TitleAlignment": "bottom"
 				}
 			]
@@ -79,14 +79,14 @@
 			"UUID": "me.dwot.keylight.toggle",
 			"Name": "Toggle Light",
 			"Tooltip": "Toggle a Key Light on/off.",
-			"Icon": "icons/actions/toggle",
+			"Icon": "icons/toggle",
 			"PropertyInspectorPath": "propertyInspector/toggle.html",
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
-					"Image": "icons/state-off",
+					"Image": "icons/toggle",
 					"TitleAlignment": "bottom"
 				}
 			]
@@ -95,7 +95,7 @@
 			"UUID": "me.dwot.keylight.setbrightness",
 			"Name": "Set Brightness",
 			"Tooltip": "Set a Key Light to a specific brightness.",
-			"Icon": "icons/actions/brightness",
+			"Icon": "icons/brightness",
 			"PropertyInspectorPath": "propertyInspector/setbrightness.html",
 			"Controllers": [
 				"Keypad"
@@ -111,7 +111,7 @@
 			"UUID": "me.dwot.keylight.scene",
 			"Name": "Apply Scene",
 			"Tooltip": "Apply a preset (on/off + brightness + temperature).",
-			"Icon": "icons/actions/scene",
+			"Icon": "icons/scene",
 			"PropertyInspectorPath": "propertyInspector/scene.html",
 			"Controllers": [
 				"Keypad"
