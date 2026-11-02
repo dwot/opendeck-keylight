@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<div id="error" class="error" hidden></div>
+	<div class="row">
+		<label>Device</label>
+		<select id="device"></select>
+	</div>
+	<div class="row">
+		<label>Dial press</label>
+		<select id="pressAction"></select>
+	</div>
+	<div class="row">
+		<label>Screen tap</label>
+		<select id="touchAction"></select>
+	</div>
+	<hr>
+	<div class="row">
+		<label>Brightness step</label>
+		<input type="number" id="stepB" min="1" max="50" step="1">
+		<div class="value">% per tick</div>
+	</div>
+	<div class="row">
+		<label>Temperature step</label>
+		<input type="number" id="stepK" min="25" max="500" step="25">
+		<div class="value">K per tick</div>
+	</div>
+	<div class="row">
+		<label>Reset to</label>
+		<input type="number" id="defaultK" min="2900" max="7000" step="50">
+		<div class="value">K</div>
+	</div>
+	<div class="note" id="note"></div>
+
+	<script src="common.js"></script>
+	<script>
+		const BRIGHTNESS_DIAL = 'me.dwot.keylight.brightnessdial';
+		const FUNCTIONS = [
+			['toggle', 'Turn on / off'],
+			['mode', 'Switch brightness / temperature'],
+			['reset', 'Reset temperature'],
+			['none', 'Nothing'],
+		];
+		const $ = (id) => document.getElementById(id);
+		const $device = $('device'), $err = $('error');
+		const $press = $('pressAction'), $touch = $('touchAction');
+		const $stepB = $('stepB'), $stepK = $('stepK'), $defaultK = $('defaultK');
+
+		for (const $sel of [$press, $touch]) {
+			for (const [value, text] of FUNCTIONS) {
+				const opt = document.createElement('option');
+				opt.value = value;
+				opt.textContent = text;
+				$sel.appendChild(opt);
+			}
+		}
+
+		// Defaults match what each dial did before press and tap were configurable.
+		function defaults() {
+			const brightness = PI.getAction() === BRIGHTNESS_DIAL;
+			return brightness
+				? { mode: 'brightness', press: 'toggle', touch: 'toggle', stepKey: 'stepB' }
+				: { mode: 'temperature', press: 'reset', touch: 'reset', stepKey: 'stepK' };
+		}
+
+		PI.on('devices', (msg) => {
+			$err.hidden = msg.devices.length > 0;
+			$err.textContent = 'No Key Lights found yet. Check they are powered and on the network, or add their IPs below.';
+			PI.fillDeviceSelect($device, msg.devices, PI.getSettings());
+		});
+
+		PI.on('settings', (s) => {
+			const d = defaults();
+			// Older settings kept one "step" for the dial's own mode.
+			const legacy = (key) => (key === d.stepKey ? s.step : undefined);
+			$press.value = s.pressAction || d.press;
+			$touch.value = s.touchAction || d.touch;
+			$stepB.value = s.stepB ?? legacy('stepB') ?? 5;
+			$stepK.value = s.stepK ?? legacy('stepK') ?? 100;
+			$defaultK.value = s.defaultK ?? 4500;
+			$('note').textContent = `Rotate to adjust ${d.mode}. "Switch brightness / temperature" `
+				+ 'flips what the dial turns; press or tap it again to switch back.';
+		});
+
+		function save() {
+			const s = PI.getSettings();
+			s.deviceId = $device.value;
+			s.pressAction = $press.value;
+			s.touchAction = $touch.value;
+			s.stepB = parseInt($stepB.value, 10) || 5;
+			s.stepK = parseInt($stepK.value, 10) || 100;
+			s.defaultK = parseInt($defaultK.value, 10) || 4500;
+			PI.saveSettings(s);
+		}
+
+		for (const el of [$device, $press, $touch, $stepB, $stepK, $defaultK]) el.addEventListener('change', save);
+	</script>
+</body>
+</html>
